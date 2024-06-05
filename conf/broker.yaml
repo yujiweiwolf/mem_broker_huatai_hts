@@ -1,0 +1,25 @@
+broker:
+  trade_gateway: tcp://xmac:9801?cluster_token=e10adc3949ba59abbe56e057f20f883e
+  wal: wal:///../data/trade.broker.wal?keep=5
+  enable_upload: true
+  query_asset_interval_ms: 0
+  query_position_interval_ms: 0
+  query_knock_interval_ms: 0
+  request_timeout_ms: 0
+  enable_query_only: false
+  enable_stock_short_selling: false
+  idle_sleep_ns: 1000000
+  cpu_affinity: 0
+  node_name: 华泰金桥2机房浩睿股票交易Broker
+  # 一台服务器上， 不管多少个broker, 共用这两块内存
+  mem_dir: ../data
+  mem_req_file: broker_req
+  mem_rep_file: broker_rep
+
+hts:
+  system_name: HT_RS
+  account: aaaaaa
+  custom: 290300007496
+  password: .203019
+  wtfs: 32
+  node: PC;IIP=NA;IPORT=NA;LIP=192.168.70.111;MAC=5065F338FE8E;HD=B8A8A554;PCN=Pftz_fund;CPU=BFEBFBFF000506E3;PI=C^NTFS^299G;VOL=0004-2CC4@Broker_Zhongxin_Hts;V1.0;EXT;LAN
