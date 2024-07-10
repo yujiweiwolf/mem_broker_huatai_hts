@@ -34,10 +34,10 @@ add_library (broker_huatai_hts ${LIB_LIST})
 SET(BROKER "mem_dongwu_hts_broker")
 SET(BROKER_TEST "test")
 
-## 可执行文件
-#add_executable(${BROKER} src/hts_broker/main.cc)
-#target_link_libraries(${BROKER}
-#        broker_huatai_hts membroker fixapi secitpdk coral swordfish x stdc++fs yaml-cpp  clickhouse-cpp-lib-static boost_date_time boost_filesystem boost_regex boost_system  boost_chrono boost_log boost_program_options boost_thread boost_iostreams z protobuf protobuf-lite sodium zmq ssl crypto iconv pthread dl)
+# 可执行文件
+add_executable(${BROKER} src/hts_broker/main.cc)
+target_link_libraries(${BROKER}
+        broker_huatai_hts membroker fixapi secitpdk coral swordfish x stdc++fs yaml-cpp  clickhouse-cpp-lib-static boost_date_time boost_filesystem boost_regex boost_system  boost_chrono boost_log boost_program_options boost_thread boost_iostreams z protobuf protobuf-lite sodium zmq ssl crypto iconv pthread dl)
 
 # 测试文件
 add_executable(${BROKER_TEST} src/test_broker_hts/test_broker_hts.cc)

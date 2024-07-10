@@ -110,6 +110,75 @@ void order(shared_ptr<MemBroker> broker) {
     broker->SendTradeOrder(msg);
 }
 
+void feeder_order(std::shared_ptr<MemBroker> broker) {
+    string dir = "/home/work/sys/develop/feeder_huatai_insight/data/feed.stock.mem";
+    LOG_INFO << "mem_feeder_dir: " << dir;
+    if (dir.empty()) {
+        return;
+    }
+    const void* data = nullptr;
+    x::MMapReader feeder_reader_;
+    feeder_reader_.Open(dir, "meta");
+    feeder_reader_.Open(dir, "data");
+    int64_t last_order_time = x::RawDateTime();
+    std::set<string> all_code;
+    std::map<string, MemQContract> all_contract;
+    while (true) {
+        int32_t type = feeder_reader_.Next(&data);
+        if (type == kMemTypeQTick) {
+            x::Sleep(10);
+            MemQTick *tick = (MemQTick *) data;
+            // LOG_INFO << "收到, " << ToString(tick);
+            string code = tick->code;
+            auto it = all_code.find(code);
+            if (it == all_code.end()) {
+                auto itor = all_contract.find(code);
+                if (itor != all_contract.end()) {
+                    if (itor->second.dtype == kDTypeStock) {
+                        char first = code.at(0);
+                        if (first == '0' || first == '3' || first == '6') {
+                                 LOG_INFO << "code: " << code << ", timestamp: " << tick->timestamp << ", order index: "
+                                          << all_code.size();
+                                all_code.insert(code);
+                            /////////////////////////////////////////////////
+                            double order_price = 0;
+                            for (int i = 0; i < 10; i++) {
+                                if (tick->ap[i] > order_price) {
+                                    order_price = tick->ap[i];
+                                }
+                            }
+                            int total_order_num = 1;
+                            string id = x::UUID();
+                            int length = sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * total_order_num;
+                            char buffer[length] = "";
+                            MemTradeOrderMessage* msg = (MemTradeOrderMessage*) buffer;
+                            strncpy(msg->id, id.c_str(), id.length());
+                            strcpy(msg->fund_id, fund_id.c_str());
+                            msg->bs_flag = kBsFlagBuy;
+                            msg->items_size = total_order_num;
+                            MemTradeOrder* item = (MemTradeOrder*)((char*)buffer + sizeof(MemTradeOrderMessage));
+                            for (int i = 0; i < total_order_num; i++) {
+                                MemTradeOrder* order = item + i;
+                                order->volume = 100;
+                                order->market = itor->second.market;
+                                order->price = order_price;
+                                order->price_type = kQOrderTypeLimit;
+                                sprintf(order->code, "00000%d.SZ", i + 1);
+                                // LOG_INFO << "send order, code: " << order->code << ", volume: " << order->volume << ", price: " << order->price;
+                            }
+                            msg->timestamp = x::RawDateTime();
+                            broker->SendTradeOrder(msg);
+                        }
+                    }
+                }
+            }
+        } else if (type == kMemTypeQContract){
+            MemQContract *contract = (MemQContract *) data;
+            all_contract.insert(std::make_pair(contract->code, *contract));
+        }
+    }
+}
+
 void query_asset(shared_ptr<MemBroker> broker) {
     string id = x::UUID();
     MemGetTradeAssetMessage msg {};
@@ -319,6 +388,7 @@ int main(int argc, char* argv[]) {
         usage += "      '6' to query position\n";
         usage += "      '7' to query order\n";
         usage += "      '8' to query knock\n";
+        usage += "      '9' to 行情报单\n";
         usage += "      'a' to kBsFlag Create\n";
         usage += "      'b' to kBsFlag Redeem\n";
         usage += "      'c' to BatchOrder\n";
@@ -364,6 +434,11 @@ int main(int argc, char* argv[]) {
                 case '8':
                 {
                     query_knock(broker);
+                    break;
+                }
+                case '9':
+                {
+                    feeder_order(broker);
                     break;
                 }
                 case 'a':

@@ -1,0 +1,1 @@
+n=$1; v=`./$n -v`; ldd $n | grep '/sys/lib/\|/repos/' | awk '{print $3}' | xargs -i cp -L -n {} .; docker build -t $n:$v .; rm -rf ${n}_$v.docker.tar.gz; docker save $n:$v > ${n}_$v.docker.tar && gzip ${n}_$v.docker.tar

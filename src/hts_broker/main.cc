@@ -1,8 +1,8 @@
 ﻿// Copyright 2020 Fancapital Inc.  All rights reserved.
-#include <iostream>
-#include <stdexcept>
-#include <sstream>
-#include <string>
+//#include <iostream>
+//#include <stdexcept>
+//#include <sstream>
+//#include <string>
 #include <boost/program_options.hpp>
 #include "../libbroker_hts/config.h"
 #include "../libbroker_hts/hts_broker.h"
@@ -42,9 +42,6 @@ int main(int argc, char* argv[]) {
         shared_ptr<MemBroker> broker = make_shared<HtsBroker>();
         server.Init(options, broker);
         server.Run();
-        while (true) {
-            x::Sleep(1000);
-        }
         LOG_INFO << "server is stopped.";
     }
     catch (x::Exception& e) {
