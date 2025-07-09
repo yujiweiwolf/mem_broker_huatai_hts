@@ -2,6 +2,7 @@
 #pragma once
 #include <string>
 #include "mem_broker/mem_base_broker.h"
+#include "risker/risk_options.h"
 
 using namespace std;
 
@@ -34,10 +35,15 @@ namespace co {
             return options_;
         }
 
+        const std::vector<std::shared_ptr<RiskOptions>>& risk_opt() const {
+            return risk_opts_;
+        }
+
         void Init();
 
     private:
         MemBrokerOptionsPtr options_;
+        std::vector<std::shared_ptr<RiskOptions>> risk_opts_;
         string system_name_;
         string itpdk_path_;
         string account_;

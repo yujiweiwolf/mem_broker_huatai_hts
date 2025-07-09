@@ -122,12 +122,12 @@ void feeder_order(std::shared_ptr<MemBroker> broker) {
     feeder_reader_.Open(dir, "data");
     int64_t last_order_time = x::RawDateTime();
     std::set<string> all_code;
-    std::map<string, MemQContract> all_contract;
+    std::map<string, MemQTickHead> all_contract;
     while (true) {
         int32_t type = feeder_reader_.Next(&data);
-        if (type == kMemTypeQTick) {
+        if (type == kMemTypeQTickBody) {
             x::Sleep(10);
-            MemQTick *tick = (MemQTick *) data;
+            MemQTickBody *tick = (MemQTickBody *) data;
             // LOG_INFO << "收到, " << ToString(tick);
             string code = tick->code;
             auto it = all_code.find(code);
@@ -141,12 +141,6 @@ void feeder_order(std::shared_ptr<MemBroker> broker) {
                                           << all_code.size();
                                 all_code.insert(code);
                             /////////////////////////////////////////////////
-                            double order_price = 0;
-                            for (int i = 0; i < 10; i++) {
-                                if (tick->ap[i] > order_price) {
-                                    order_price = tick->ap[i];
-                                }
-                            }
                             int total_order_num = 1;
                             string id = x::UUID();
                             int length = sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * total_order_num;
@@ -161,9 +155,9 @@ void feeder_order(std::shared_ptr<MemBroker> broker) {
                                 MemTradeOrder* order = item + i;
                                 order->volume = 100;
                                 order->market = itor->second.market;
-                                order->price = order_price;
+                                order->price = tick->new_price;
                                 order->price_type = kQOrderTypeLimit;
-                                sprintf(order->code, "00000%d.SZ", i + 1);
+                                strcpy(order->code, tick->code);
                                 // LOG_INFO << "send order, code: " << order->code << ", volume: " << order->volume << ", price: " << order->price;
                             }
                             msg->timestamp = x::RawDateTime();
@@ -172,8 +166,8 @@ void feeder_order(std::shared_ptr<MemBroker> broker) {
                     }
                 }
             }
-        } else if (type == kMemTypeQContract){
-            MemQContract *contract = (MemQContract *) data;
+        } else if (type == kMemTypeQTickHead){
+            MemQTickHead *contract = (MemQTickHead *) data;
             all_contract.insert(std::make_pair(contract->code, *contract));
         }
     }
@@ -182,7 +176,6 @@ void feeder_order(std::shared_ptr<MemBroker> broker) {
 void query_asset(shared_ptr<MemBroker> broker) {
     string id = x::UUID();
     MemGetTradeAssetMessage msg {};
-    // memset(&msg, 0, sizeof(msg));
     strncpy(msg.id, id.c_str(), id.length());
     strcpy(msg.fund_id, fund_id.c_str());
     msg.timestamp = x::RawDateTime();
@@ -368,9 +361,10 @@ int main(int argc, char* argv[]) {
         Singleton<Config>::Instance();
         Singleton<Config>::GetInstance()->Init();
         MemBrokerOptionsPtr options = Singleton<Config>::GetInstance()->options();
+        const std::vector<std::shared_ptr<RiskOptions>>& risk_opts = Singleton<Config>::GetInstance()->risk_opt();
         std::shared_ptr<HtsBroker> broker = std::make_shared<HtsBroker>();
         MemBrokerServer server;
-        server.Init(options, broker);
+        server.Init(options, risk_opts, broker);
         server.Start();
 
         fund_id = Singleton<Config>::GetInstance()->account();

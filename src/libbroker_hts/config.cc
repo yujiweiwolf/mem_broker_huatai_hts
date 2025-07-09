@@ -49,7 +49,7 @@ namespace co {
         auto filename = x::FindFile("broker.yaml");
         YAML::Node root = YAML::LoadFile(filename);
         options_ = MemBrokerOptions::Load(filename);
-
+        risk_opts_ = RiskOptions::Load(filename);
         auto broker = root["hts"];
         system_name_ = getStr(broker, "system_name");
         boost::filesystem::path _p(filename);
@@ -73,7 +73,20 @@ namespace co {
             << "  password: " << string(password_.length(), '*') << endl
             << "  wtfs: " << wtfs_ << endl
             << "  node: " << node_ << endl;
-
+        ss << "risk:" << std::endl
+           << "  accounts:" << std::endl;
+        for (auto& risk : risk_opts_) {
+            ss << "    - {fund_id: \"" << risk->fund_id() << "\", risker_id: \"" << risk->risker_id();
+            ss << "\", disabled: \"" << std::boolalpha << risk->disabled();
+            ss << "\", enable_prevent_self_knock: \"" << std::boolalpha << risk->GetBool("enable_prevent_self_knock");
+            ss << "\", only_etf_anti_self_knock: \"" << std::boolalpha << risk->GetBool("only_etf_anti_self_knock");
+            ss << "\", withdraw_ratio: \""  << risk->GetFloat64("withdraw_ratio");
+            ss << "\", knock_ratio: \""  << risk->GetFloat64("knock_ratio");
+            ss << "\", failure_ratio: \""  << risk->GetFloat64("failure_ratio");
+            ss << "\", max_order_volume: \""  << risk->GetInt64("max_order_volume");
+            ss << "\", max_order_amount: \""  << risk->GetFloat64("max_order_amount");
+            ss << std::endl;
+        }
         ss << "+-------------------- configuration end   --------------------+";
         LOG_INFO << endl << ss.str();
     }

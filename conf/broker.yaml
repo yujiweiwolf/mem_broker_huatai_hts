@@ -16,6 +16,27 @@ broker:
   mem_req_file: broker_req
   mem_rep_file: broker_rep
 
+# 机器上的所有帐号都默认这个配置，即使不填也是此配置
+risk:
+  accounts:
+    - {fund_id: "S1",
+       risker_id: "fancapital",
+       disabled: false,
+       name: "普通测试帐号",
+       enable_prevent_self_knock: true,
+       only_etf_anti_self_knock: false,
+       data: '"withdraw_ratio": 0.5, "knock_ratio": 0.3, "failure_ratio": 0.2'
+    }
+    - {fund_id: "S2",
+       risker_id: "zhongxin",
+       disabled: false,
+       name: "中信帐号",
+       enable_prevent_self_knock: true,
+       only_etf_anti_self_knock: false,
+       data: '"max_order_volume": 10000, "max_order_amount": 1000000000'
+    }
+  feeder_dir: ../data
+
 hts:
   system_name: HT_RS
   account: aaaaaa

@@ -53,8 +53,8 @@ namespace co {
         SECITPDK_SetConnEventCallback(MidBridge::SetConnEventCallback);
 
         ReqLogin();
-        ReqQueryAccout();
-        LOG_INFO << "init hts accout finished.";
+        ReqQueryAccount();
+        LOG_INFO << "init hts account finished.";
     }
 
     void HtsBroker::ReqLogin() {
@@ -76,11 +76,11 @@ namespace co {
             }
             login_flag_.store(true);
         } catch (std::exception& e) {
-            LOG_ERROR << "ReqLogin faild, " << e.what();
+            LOG_ERROR << "ReqLogin failed, " << e.what();
         }
     }
 
-    void HtsBroker::ReqQueryAccout() {
+    void HtsBroker::ReqQueryAccount() {
         std::vector<ITPDK_GDH> arGDH(10);
         while (true) {
             arGDH.clear();
@@ -88,7 +88,7 @@ namespace co {
             if (nRet < 0) {
                 char msg[1024];
                 SECITPDK_GetLastError(msg);
-                LOG_ERROR << "query accout failed. Msg: " << ConvertCharacters(msg);
+                LOG_ERROR << "query account failed. Msg: " << ConvertCharacters(msg);
             } else {
                 break;
             }
@@ -290,9 +290,7 @@ namespace co {
                             int64_t market = Market2Std(it.Market);
                             string suffix = MarketToSuffix(market).data();
                             string code = x::Trim(it.StockCode) + suffix;
-                            stringstream ss;
-                            ss << x::Trim(it.Market) << SPLITFLAG << it.OrderId;
-                            string order_no = ss.str();
+                            string order_no = CreateStandardOrderNo(market, to_string(it.OrderId));
                             string name = ConvertCharacters(x::Trim(it.StockName));
                             int64_t match_volume = abs(it.MatchQty);
                             if (IsShReverseRepurchase(code)) {
@@ -335,7 +333,8 @@ namespace co {
                             }
 
                             if (it.BatchNo > 0) {
-                                sprintf(item.batch_no, "%ld", it.BatchNo);
+                                string batch_no = CreateStandardBatchNo(market, it.BatchNo % 1000, std::to_string(it.BatchNo));
+                                strncpy(item.batch_no, batch_no.c_str(), batch_no.length());
                             }
                             all_knock.push_back(item);
 
@@ -396,7 +395,7 @@ namespace co {
                         int order_direct = StdBsFlag2Hts(req->bs_flag);
                         auto it = accouts_.find(std_market);
                         if (it != accouts_.end()) {
-                            strncpy(batchorder.Gdh, it->second.SecuAccount, strlen(it->second.SecuAccount));
+                            memcpy(batchorder.Gdh, it->second.SecuAccount, strlen(it->second.SecuAccount));
                         }
                         string std_jys = std_market == co::kMarketSH ? "SH" : "SZ";
                         strncpy(batchorder.Jys, std_jys.c_str(), std_jys.length());
@@ -477,14 +476,14 @@ namespace co {
                                 req_msg_.erase(nKFSBDBH);
                             }
                         } else {
-                            error_msg = "not find market accout";
+                            error_msg = "not find market account";
                         }
                     } else {
                         error_msg = "order item is empty";
                     }
                 }
             } else {
-                error_msg = "accout not login in , send order is not allowed.";
+                error_msg = "account not login in , send order is not allowed.";
             }
             if (error_msg.length() > 0) {
                 int length = sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * req->items_size;
@@ -492,7 +491,6 @@ namespace co {
                 memcpy(buffer, req, length);
                 MemTradeOrderMessage* rep = (MemTradeOrderMessage*)buffer;
                 strcpy(rep->error, error_msg.c_str());
-                rep->rep_time = x::RawDateTime();
                 SendRtnMessage(string(buffer, length), kMemTypeTradeOrderRep);
             }
         } catch (std::exception& e) {
@@ -505,18 +503,24 @@ namespace co {
             string error_msg;
             if (login_flag_.load()) {
                 if (strlen(req->batch_no) > 0) {
-                    int64 lsh = atoll(req->batch_no);
-                    {
-                        std::unique_lock<std::mutex> lock(mutex_);
-                        req_msg_.emplace(std::make_pair(lsh, string((char*)req, sizeof(MemTradeWithdrawMessage))));
-                    }
-                    int64 nRet = SECITPDK_BatchOrderWithdraw_ASync(custom_id_.c_str(), lsh);
-                    if (nRet < 0) {
-                        char _msg[1024];
-                        SECITPDK_GetLastError(_msg);
-                        error_msg = ConvertCharacters(_msg).c_str();
-                        std::unique_lock<std::mutex> lock(mutex_);
-                        req_msg_.erase(lsh);
+                    vector<string> vec_info;
+                    boost::split(vec_info, req->batch_no, boost::is_any_of(SPLITFLAG), boost::token_compress_on);
+                    if (vec_info.size() == 3) {
+                        int64 lsh = atoll(vec_info[2].c_str());
+                        {
+                            std::unique_lock<std::mutex> lock(mutex_);
+                            req_msg_.emplace(std::make_pair(lsh, string((char *) req, sizeof(MemTradeWithdrawMessage))));
+                        }
+                        int64 nRet = SECITPDK_BatchOrderWithdraw_ASync(custom_id_.c_str(), lsh);
+                        if (nRet < 0) {
+                            char msg[1024];
+                            SECITPDK_GetLastError(msg);
+                            error_msg = ConvertCharacters(msg).c_str();
+                            std::unique_lock<std::mutex> lock(mutex_);
+                            req_msg_.erase(lsh);
+                        }
+                    } else {
+                        error_msg = "not valid batch_no: " + string(req->batch_no);
                     }
                 } else if (strlen(req->order_no) > 0) {
                     vector<string> vec_info;
@@ -528,10 +532,11 @@ namespace co {
                             std::unique_lock<std::mutex> lock(mutex_);
                             req_msg_.emplace(std::make_pair(nKFSBDBH, string((char*)req, sizeof(MemTradeWithdrawMessage))));
                         }
+                        string jys = (vec_info[0].at(0) == '1') ? "SH" : "SZ";
                         if (JudgeReverseRepurchase(req->order_no)) {
-                            nRet = SECITPDK_ZQHGWithdraw_ASync(custom_id_.c_str(), vec_info[0].c_str(), atol(vec_info[1].c_str()), nKFSBDBH);
+                            nRet = SECITPDK_ZQHGWithdraw_ASync(custom_id_.c_str(), jys.c_str(), atol(vec_info[1].c_str()), nKFSBDBH);
                         } else {
-                            nRet = SECITPDK_OrderWithdraw_ASync(custom_id_.c_str(), vec_info[0].c_str(), atol(vec_info[1].c_str()), nKFSBDBH);
+                            nRet = SECITPDK_OrderWithdraw_ASync(custom_id_.c_str(), jys.c_str(), atol(vec_info[1].c_str()), nKFSBDBH);
                         }
                         LOG_INFO << "Withdraw_ASync, nKFSBDBH: " << nKFSBDBH << ", nRet: " << nRet;
                         if (nRet < 0) {
@@ -546,7 +551,7 @@ namespace co {
                     }
                 }
             } else {
-                error_msg = "accout not login in , withdraw is not allowed.";
+                error_msg = "account not login in , withdraw is not allowed.";
             }
             if (error_msg.length() > 0) {
                 int length = sizeof(MemTradeWithdrawMessage);
@@ -554,7 +559,6 @@ namespace co {
                 memcpy(buffer, req, length);
                 MemTradeWithdrawMessage* rep = (MemTradeWithdrawMessage*)buffer;
                 strcpy(rep->error, error_msg.c_str());
-                rep->rep_time = x::RawDateTime();
                 SendRtnMessage(string(buffer, length), kMemTypeTradeWithdrawRep);
             }
         } catch (std::exception& e) {
@@ -650,11 +654,6 @@ namespace co {
                     if (dom.HasMember("RETNOTE") && dom["RETNOTE"].IsString()) {
                         ret_note = dom["RETNOTE"].GetString();
                     }
-                    // 无JYS字段
-//                    string jys;
-//                    if (dom.HasMember("JYS") && dom["JYS"].IsString()) {
-//                        jys = dom["JYS"].GetString();
-//                    }
                     LOG_INFO << "OnRspASync, _wtpch: " << _wtpch << ", _kfsbdbh: " << _kfsbdbh << ", _jylx: " << _jylx;
                     if (_jylx == 30 || _jylx == 31 || _jylx == 32 || _jylx == 33) {
                         MemTradeOrderMessage* req = (MemTradeOrderMessage*)_req_message.data();
@@ -663,13 +662,8 @@ namespace co {
                         memcpy(buffer, req, length);
                         MemTradeOrderMessage* rep = (MemTradeOrderMessage*)buffer;
                         if (wth > 0) {
-                            string order_no;
                             auto order = (MemTradeOrder*)((char*)rep + sizeof(MemTradeOrderMessage));
-                            if (order->market == co::kMarketSH) {
-                                order_no = string("SH") + SPLITFLAG + std::to_string(wth);
-                            } else {
-                                order_no = string("SZ") + SPLITFLAG + std::to_string(wth);
-                            }
+                            string order_no = CreateStandardOrderNo(order->market, std::to_string(wth));
                             strcpy(order->order_no, order_no.c_str());
                             if (IsShReverseRepurchase(order->code) || IsSzReverseRepurchase(order->code)) {
                                 CollectReverseRepurchase(order_no);
@@ -678,7 +672,6 @@ namespace co {
                             string error = GetErrorMsg(ret_code, ConvertCharacters(ret_note).c_str());
                             strcpy(rep->error, error.c_str());
                         }
-                        rep->rep_time = x::RawDateTime();
                         SendRtnMessage(string(buffer, length), kMemTypeTradeOrderRep);
                     } else if (_jylx == 40 || _jylx == 41 || _jylx == 42 || _jylx == 43) {
                         MemTradeWithdrawMessage* req = (MemTradeWithdrawMessage*)_req_message.data();
@@ -690,7 +683,6 @@ namespace co {
                             string error = GetErrorMsg(ret_code, ConvertCharacters(ret_note).c_str());
                             strcpy(rep->error, error.c_str());
                         }
-                        rep->rep_time = x::RawDateTime();
                         SendRtnMessage(string(buffer, length), kMemTypeTradeWithdrawRep);
                     } else {
                         LOG_ERROR << "not valid jylx: " << _jylx;
@@ -719,12 +711,14 @@ namespace co {
                     MemTradeOrderMessage* rep = (MemTradeOrderMessage*)buffer;
                     auto items = (MemTradeOrder*)((char*)rep + sizeof(MemTradeOrderMessage));
 
+                    int64_t std_market = 0;
                     if (dom.HasMember("orders")) {
                         const rapidjson::Value& childIter = dom["orders"];
                         for (rapidjson::Value::ConstMemberIterator itor = childIter.MemberBegin(); itor != childIter.MemberEnd(); ++itor) {
                             string num = itor->name.GetString();
                             int _index = atoi(num.c_str());
                             MemTradeOrder* order = items + (_index - 1);
+                            std_market = order->market;
                             int _wth = 0;
                             string _note;
                             if (itor->value.IsObject()) {
@@ -732,8 +726,7 @@ namespace co {
                                 _note = itor->value.GetObject()["NOTE"].GetString();
                             }
                             if (_wth > 0) {
-                                string std_jys = order->market == co::kMarketSH ? "SH" : "SZ";
-                                string order_no = std_jys + SPLITFLAG + std::to_string(_wth);
+                                string order_no = CreateStandardOrderNo(order->market, std::to_string(_wth));;
                                 strcpy(order->order_no, order_no.c_str());
                             } else {
                                 string error = ConvertCharacters(_note);
@@ -741,14 +734,13 @@ namespace co {
                             }
                         }
                     }
-                    string batch_no = std::to_string(_wtpch);
+                    string batch_no = CreateStandardBatchNo(std_market, _wtpch % 1000, std::to_string(_wtpch));
                     strcpy(rep->batch_no, batch_no.c_str());
-                    rep->rep_time = x::RawDateTime();
                     SendRtnMessage(string(buffer, length), kMemTypeTradeOrderRep);
                 }
             }
         } catch (std::exception& e) {
-            LOG_ERROR << "recv OnRspASync failed: " << e.what();
+            LOG_ERROR << "rec OnRspASync failed: " << e.what();
         }
     }
 
@@ -771,12 +763,9 @@ namespace co {
                 }
 
                 if (IsShReverseRepurchase(code) || IsSzReverseRepurchase(code)) {
-                    string order_no;
                     if (dom.HasMember("WTH") && dom["WTH"].IsInt64()) {
                         int64_t wth = dom["WTH"].GetInt64();
-                        stringstream ss;
-                        ss << jys << SPLITFLAG << wth;
-                        order_no = ss.str();
+                        string order_no = order_no = CreateStandardOrderNo(market, to_string(wth));
                         CollectReverseRepurchase(order_no);
                     }
                 }
@@ -818,9 +807,7 @@ namespace co {
                 string match_no;
                 if (dom.HasMember("WTH") && dom["WTH"].IsInt64()) {
                     int64_t wth = dom["WTH"].GetInt64();
-                    stringstream ss;
-                    ss << jys << SPLITFLAG << wth;
-                    order_no = ss.str();
+                    order_no = CreateStandardOrderNo(market, to_string(wth));
                     match_no = ("_" + order_no);
                 }
 
@@ -846,7 +833,7 @@ namespace co {
                 if (dom.HasMember("LSH") && dom["LSH"].IsInt64()) {
                     int64_t lsh = dom["LSH"].GetInt64();
                     if (lsh > 0) {
-                        batch_no = std::to_string(lsh);
+                        batch_no = CreateStandardBatchNo(market, lsh % 1000, std::to_string(lsh));
                     }
                 }
                 int length = sizeof(MemTradeKnock);
@@ -905,9 +892,7 @@ namespace co {
                 string order_no;
                 if (dom.HasMember("WTH") && dom["WTH"].IsInt64()) {
                     int64_t wth = dom["WTH"].GetInt64();
-                    stringstream ss;
-                    ss << jys << SPLITFLAG << wth;
-                    order_no = ss.str();
+                    order_no = CreateStandardOrderNo(market, to_string(wth));
                 }
 
                 int64_t bs_flag = 0;
@@ -936,7 +921,7 @@ namespace co {
                 if (dom.HasMember("LSH") && dom["LSH"].IsInt64()) {
                     int64_t lsh = dom["LSH"].GetInt64();
                     if (lsh > 0) {
-                        batch_no = std::to_string(lsh);
+                        batch_no = CreateStandardBatchNo(market, lsh % 1000, std::to_string(lsh));
                     }
                 }
 
@@ -1000,9 +985,7 @@ namespace co {
                 string match_no;
                 if (dom.HasMember("CXWTH") && dom["CXWTH"].IsInt64()) {
                     int64_t wth = dom["CXWTH"].GetInt64();
-                    stringstream ss;
-                    ss << jys << SPLITFLAG << wth;
-                    order_no = ss.str();
+                    order_no = CreateStandardOrderNo(market, to_string(wth));
                     match_no = "_" + order_no;
                 }
 
@@ -1021,7 +1004,7 @@ namespace co {
                 if (dom.HasMember("LSH") && dom["LSH"].IsInt64()) {
                     int64_t lsh = dom["LSH"].GetInt64();
                     if (lsh > 0) {
-                        batch_no = std::to_string(lsh);
+                        batch_no = CreateStandardBatchNo(market, lsh % 1000, std::to_string(lsh));
                     }
                 }
                 int length = sizeof(MemTradeKnock);
@@ -1046,13 +1029,6 @@ namespace co {
     }
 
     void HtsBroker::PrepareQuery() {
-        int64_t elapsed_ms = x::Timestamp() - pre_query_timestamp_;
-        int64_t sleep_ms = FLOW_CONTROL_MS - elapsed_ms;
-        if (sleep_ms > 0) {
-            LOG_INFO << elapsed_ms << "ms elapsed after pre query, sleep " << sleep_ms << "ms for flow control ...";
-            x::Sleep(sleep_ms);
-        }
-        pre_query_timestamp_ = x::Timestamp();
     }
 
     void HtsBroker::InputReverseRepurchase() {

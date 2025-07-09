@@ -27,7 +27,7 @@ class HtsBroker : public MemBroker {
 
     void ReqLogin();
 
-    void ReqQueryAccout();
+    void ReqQueryAccount();
 
     void OnQueryTradeAsset(MemGetTradeAssetMessage* req);
 
