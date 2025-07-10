@@ -3,7 +3,6 @@
 #include "hts_broker.h"
 
 #define SPLITFLAG "-"
-#define FLOW_CONTROL_MS 10
 #define MAX_QUERY_NUM 200
 
 namespace co {
@@ -34,8 +33,9 @@ namespace co {
         InputReverseRepurchase();
         int64_t micro_second = chrono::duration_cast<chrono::microseconds>(chrono::system_clock::now().time_since_epoch()).count();
         start_index_ = (x::RawTime() * 1000LL + micro_second % 1000LL) * 1000LL;
+        batch_start_index_ = x::RawTime() / 1000;
         date_ = x::RawDate();
-        LOG_INFO << "Start RequestID: " << start_index_;
+        LOG_INFO << "Start RequestID: " << start_index_ << ", batch_start_index: " << batch_start_index_;
 
         string itpdk_path = Singleton<Config>::GetInstance()->itpdk_path();
         string wtfs = Singleton<Config>::GetInstance()->wtfs();
@@ -100,7 +100,7 @@ namespace co {
                 << "; Market:" << arGDH[index].Market;
             int64_t market = Market2Std(arGDH[index].Market);
             if (market > 0) {
-                accouts_[market] = arGDH[index];
+                accounts_[market] = arGDH[index];
             }
         }
     }
@@ -389,12 +389,11 @@ namespace co {
                         BatchOrderInfo batchorder;
                         memset(&batchorder, 0, sizeof (batchorder));
 
-                        // string std_security = DropCodeSuffix(order->code).data();
                         string std_security = string(order->code).substr(0, 6);
                         int64_t std_market = order->market;
                         int order_direct = StdBsFlag2Hts(req->bs_flag);
-                        auto it = accouts_.find(std_market);
-                        if (it != accouts_.end()) {
+                        auto it = accounts_.find(std_market);
+                        if (it != accounts_.end()) {
                             memcpy(batchorder.Gdh, it->second.SecuAccount, strlen(it->second.SecuAccount));
                         }
                         string std_jys = std_market == co::kMarketSH ? "SH" : "SZ";
@@ -406,7 +405,7 @@ namespace co {
                         batchorder.Ddlx = DDLX_XJWT;
                         vec_batchinfo_.push_back(batchorder);
                     }
-                    int64 nWTPCH = GetRequestID();
+                    int64 nWTPCH = (++batch_start_index_) * 1000 + item_size;
                     {
                         std::unique_lock<std::mutex> lock(mutex_);
                         req_msg_.emplace(std::make_pair(nWTPCH, string((char*)req, length)));
@@ -442,8 +441,8 @@ namespace co {
                             std_volume = order->volume / 10; // 上海可转债的单位是手，一手=10张
                         }
 
-                        auto it = accouts_.find(std_market);
-                        if (it != accouts_.end()) {
+                        auto it = accounts_.find(std_market);
+                        if (it != accounts_.end()) {
                             int64 nKFSBDBH = GetRequestID();
                             {
                                 std::unique_lock<std::mutex> lock(mutex_);
@@ -578,7 +577,7 @@ namespace co {
             OnRtnTrade(pTime, pMsg, nType);
             break;
         case 11:
-            OnRtnFaildOrder(pTime, pMsg, nType);
+            OnRtnFailedOrder(pTime, pMsg, nType);
             break;
         default:
             break;
@@ -730,7 +729,7 @@ namespace co {
                                 strcpy(order->order_no, order_no.c_str());
                             } else {
                                 string error = ConvertCharacters(_note);
-                                strcpy(rep->error, error.c_str());
+                                strcpy(order->error, error.c_str());
                             }
                         }
                     }
@@ -775,7 +774,7 @@ namespace co {
         }
     }
 
-    void HtsBroker::OnRtnFaildOrder(const char* pTime, const char* pMsg, int nType) {
+    void HtsBroker::OnRtnFailedOrder(const char* pTime, const char* pMsg, int nType) {
         try {
             rapidjson::Document dom;
             flatbuffers::FlatBufferBuilder _push_fbb;
@@ -813,9 +812,8 @@ namespace co {
 
                 string error;
                 if (dom.HasMember("JGSM") && dom["JGSM"].IsString()) {
-                    string error = ConvertCharacters(dom["JGSM"].GetString());
+                    error = ConvertCharacters(dom["JGSM"].GetString());
                     LOG_ERROR << code << ", order_no: " << order_no << ", error: " << error;
-                    error = error;
                 }
 
                 int64_t bs_flag = 0;
@@ -1026,9 +1024,6 @@ namespace co {
         } catch (std::exception& e) {
             LOG_ERROR << "OnRspQueryPositions: " << e.what();
         }
-    }
-
-    void HtsBroker::PrepareQuery() {
     }
 
     void HtsBroker::InputReverseRepurchase() {

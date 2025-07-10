@@ -38,9 +38,9 @@ risk:
   feeder_dir: ../data
 
 hts:
-  system_name: HT_RS
-  account: aaaaaa
-  custom: 290300007496
-  password: .203019
-  wtfs: 32
+  system_name: A5_RS
+  account: 01000000076901
+  custom: 010000000769
+  password: .123123
+  wtfs: 8
   node: PC;IIP=NA;IPORT=NA;LIP=192.168.70.111;MAC=5065F338FE8E;HD=B8A8A554;PCN=Pftz_fund;CPU=BFEBFBFF000506E3;PI=C^NTFS^299G;VOL=0004-2CC4@Broker_Zhongxin_Hts;V1.0;EXT;LAN

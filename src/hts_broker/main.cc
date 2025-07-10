@@ -1,8 +1,4 @@
 ﻿// Copyright 2020 Fancapital Inc.  All rights reserved.
-//#include <iostream>
-//#include <stdexcept>
-//#include <sstream>
-//#include <string>
 #include <boost/program_options.hpp>
 #include "../libbroker_hts/config.h"
 #include "../libbroker_hts/hts_broker.h"
@@ -12,7 +8,7 @@ using namespace std;
 using namespace co;
 namespace po = boost::program_options;
 
-const string kVersion = "v1.0.3";
+const string kVersion = "v2.0.1";
 
 int main(int argc, char* argv[]) {
     try {
@@ -38,9 +34,10 @@ int main(int argc, char* argv[]) {
         Singleton<Config>::Instance();
         Singleton<Config>::GetInstance()->Init();
         MemBrokerOptionsPtr options = Singleton<Config>::GetInstance()->options();
+        const std::vector<std::shared_ptr<RiskOptions>>& risk_opts = Singleton<Config>::GetInstance()->risk_opt();
         MemBrokerServer server;
         shared_ptr<MemBroker> broker = make_shared<HtsBroker>();
-        server.Init(options, broker);
+        server.Init(options, risk_opts, broker);
         server.Run();
         LOG_INFO << "server is stopped.";
     }

@@ -44,8 +44,6 @@ class HtsBroker : public MemBroker {
     void SetConnEventCallback(int nEvent);
 
  private:
-    void PrepareQuery();
-    void UpdataMaxOrderParam();
     void InputReverseRepurchase();
     bool IsShReverseRepurchase(const string& code);
     bool IsSzReverseRepurchase(const string& code);
@@ -54,7 +52,7 @@ class HtsBroker : public MemBroker {
     void CollectReverseRepurchase(const string& order_no);
     void OnRspASync(const char* pTime, const char* pMsg, int nType);
     void OnRtnOrder(const char* pTime, const char* pMsg, int nType);
-    void OnRtnFaildOrder(const char* pTime, const char* pMsg, int nType);
+    void OnRtnFailedOrder(const char* pTime, const char* pMsg, int nType);
     void OnRtnTrade(const char* pTime, const char* pMsg, int nType);
     void OnRtnCancel(const char* pTime, const char* pMsg, int nType);
     int64 GetRequestID();
@@ -67,21 +65,18 @@ class HtsBroker : public MemBroker {
     string key_name_;
     string pwd_;
     std::shared_ptr<std::thread> thread_;
-    int64_t pre_query_timestamp_ = 0;  // 上次查询的时间戳，用于进行流控控制
 
     std::set<std::string> set_reverse_repurchase;
 
-    unordered_map<int64_t, ITPDK_GDH> accouts_;
-    unordered_map<string, string> names_;
+    unordered_map<int64_t, ITPDK_GDH> accounts_;
     vector<BatchOrderInfo> vec_batchinfo_;
     set<string> sh_reverse_repurchase_;
     set<string> sz_reverse_repurchase_;
     set<string> reverse_repurchase_orders_;
 
     int64 start_index_ = 0;
+    int64 batch_start_index_ = 0;
     std::mutex mutex_;
-    flatbuffers::FlatBufferBuilder req_fbb_;
-    // 批量报撤使用的是同一个是RequestID
     std::unordered_map<int64, std::string> req_msg_;  // key 是RequestID
 };
 
