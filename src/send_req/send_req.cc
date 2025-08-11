@@ -9,7 +9,7 @@ using namespace co;
 namespace po = boost::program_options;
 
 const char fund_id[] = "01000000076901";
-const char mem_dir[] = "../data";
+const char mem_dir[] = "/tmp/data";
 const char mem_req_file[] = "broker_req";
 const char mem_rep_file[] = "broker_rep";
 const int part_volume = 2000;  // 部分成交的数量
@@ -28,11 +28,12 @@ void order_sh(x::MMapWriter* writer) {
         strcpy(order->code, "600000.SH");
 //        order->market = kMarketSH;
         order->volume = 100;
-        order->price = 809.99;
-        string volume;
-        cout << "please input volume" << endl;
-        cin >> volume;
-        order->volume = atoll(volume.c_str());
+        order->price = 3209.99;
+//        string volume;
+//        cout << "please input volume" << endl;
+//        cin >> volume;
+//        order->volume = atoll(volume.c_str());
+        order->volume = 100;
         LOG_INFO << "send order, code: " << order->code
                  << ", bs_flag: " << msg->bs_flag
                  << ", volume: " << order->volume
@@ -43,12 +44,13 @@ void order_sh(x::MMapWriter* writer) {
 }
 
 void order_sz(x::MMapWriter* writer) {
+    string fund_id = "S1";
     int total_order_num = 1;
     string id = x::UUID();
     void* buffer = writer->OpenFrame(sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * total_order_num);
     MemTradeOrderMessage* msg = (MemTradeOrderMessage*) buffer;
     strncpy(msg->id, id.c_str(), id.length());
-    strcpy(msg->fund_id, fund_id);
+    strcpy(msg->fund_id, fund_id.c_str());
     msg->items_size = total_order_num;
     msg->bs_flag = co::kBsFlagBuy;
     for (int i = 0; i < total_order_num; i++) {
@@ -128,7 +130,6 @@ void order(x::MMapWriter* writer) {
     msg->timestamp = x::RawDateTime();
     writer->CloseFrame(kMemTypeTradeOrderReq);
 }
-
 
 void batch_order(x::MMapWriter* writer) {
     int total_order_num = 3;

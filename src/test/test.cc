@@ -338,7 +338,7 @@ void batch_withdraw(shared_ptr<MemBroker> broker) {
 void ReadRep() {
     const void* data = nullptr;
     x::MMapReader common_reader;
-    common_reader.Open(mem_dir, mem_rep_file, true);
+    common_reader.Open(mem_dir, mem_rep_file, false);
     while (true) {
         x::Sleep(1);
         int32_t type = common_reader.Next(&data);

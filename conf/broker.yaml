@@ -1,18 +1,20 @@
 broker:
-  trade_gateway: tcp://xmac:9801?cluster_token=e10adc3949ba59abbe56e057f20f883e
-  wal: wal:///../data/trade.broker.wal?keep=5
-  enable_upload: true
+  enable_query_only: false
   query_asset_interval_ms: 0
   query_position_interval_ms: 0
   query_knock_interval_ms: 0
-  request_timeout_ms: 0
-  enable_query_only: false
+  request_timeout_ms: 5000
+  disable_flow_control: false
+  flow_control:
+    - { market: ".SH", th_tps_limit: 350, th_daily_warning: 17000, th_daily_limit: 18000 }
+    - { market: ".SZ", th_tps_limit: 450, th_daily_warning: 17000, th_daily_limit: 18000 }
+  batch_order_size: 200
   enable_stock_short_selling: false
   idle_sleep_ns: 1000000
   cpu_affinity: 0
   node_name: 华泰金桥2机房浩睿股票交易Broker
   # 一台服务器上， 不管多少个broker, 共用这两块内存
-  mem_dir: ../data
+  mem_dir: /tmp/data
   mem_req_file: broker_req
   mem_rep_file: broker_rep
 

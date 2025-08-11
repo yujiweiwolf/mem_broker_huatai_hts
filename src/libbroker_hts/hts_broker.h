@@ -1,9 +1,5 @@
 // Copyright 2020 Fancapital Inc.  All rights reserved.
 #pragma once
-#include <memory>
-#include <string>
-#include <mutex>
-#include <boost/algorithm/string.hpp>
 #include "rapidjson/rapidjson.h"
 #include "secitpdk/secitpdk.h"
 #include "rapidjson/document.h"
@@ -17,11 +13,9 @@
 namespace co {
 class HtsBroker : public MemBroker {
  public:
-    HtsBroker();
+    HtsBroker() = default;
 
-    virtual ~HtsBroker();
-
-    void Start();
+    virtual ~HtsBroker() = default;
 
     void OnInit();
 
@@ -65,8 +59,6 @@ class HtsBroker : public MemBroker {
     string key_name_;
     string pwd_;
     std::shared_ptr<std::thread> thread_;
-
-    std::set<std::string> set_reverse_repurchase;
 
     unordered_map<int64_t, ITPDK_GDH> accounts_;
     vector<BatchOrderInfo> vec_batchinfo_;
